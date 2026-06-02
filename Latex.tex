@@ -1,0 +1,202 @@
+\documentclass{llncs}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{url}
+
+\sloppy
+
+\begin{document}
+
+\pagestyle{empty}
+
+\title{Experimental Report on Multi-Target Stockout Forecasting Using the FreshRetailNet-50K Dataset}
+\author{Ha Thuc Khuong Ninh\inst{1}}
+
+\institute{FPT University, Ho Chi Minh City, Vietnam\\
+\email{hathuckhuongninh@gmail.com}}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+This report presents a workflow for building a stockout forecasting model in fresh food retail using the FreshRetailNet-50K dataset. Because the original dataset is large, the experiment focuses on the \textbf{City ID 3} subset, which contains 238,320 records, 101 stores, and 173 products. The workflow consists of three main stages: data preprocessing, exploratory data analysis (EDA), and training a multi-output XGBoost model. From the \texttt{hours\_stock\_status} field, the system extracts 16 binary labels corresponding to operating hours from 6:00 to 21:00. A \texttt{MultiOutputClassifier} with an \texttt{XGBClassifier} core is trained on 83 days of data and tested on the final 7 days. After optimizing a separate prediction threshold for each hour using the Precision--Recall curve, the model achieves an average Accuracy of 72.22\%, Precision of 41.47\%, Recall of 62.34\%, and F1-Score of 49.43\% on 18,536 test samples. The results show that the model can detect a meaningful portion of stockout cases, although it still exhibits a trade-off between Recall and Precision because of the class imbalance inherent in stockout forecasting.
+\end{abstract}
+
+\section{Introduction}
+Inventory management in fresh food retail is challenging because products have short shelf lives, demand changes rapidly throughout the day, and replenishment is constrained by logistics. When a product is out of stock, the sales system often records zero sales. This zero value does not necessarily indicate low demand; it may instead result from customers being unable to purchase the product. This phenomenon creates censored sales data and causes traditional demand forecasting models to underestimate true demand.
+
+The objective of this report is to build an experimental workflow that forecasts stockout states at multiple checkpoints within a day. Instead of predicting a single daily label, the model simultaneously predicts 16 binary states across the operating window from 6:00 to 21:00. This approach helps identify periods that are more likely to experience shortages and supports more time-specific replenishment planning.
+
+The experiment is implemented across three notebooks: \texttt{uploads/DataPreprocessing.ipynb} for data preprocessing, \texttt{prism-uploads/EDA.ipynb} for exploratory analysis, and \texttt{prism-uploads/XGBoost\_Model.ipynb} for model construction and evaluation.
+
+\section{Data and Preprocessing}
+
+\subsection{Data Source}
+The data are taken from FreshRetailNet-50K, a fresh food retail dataset with hourly inventory-state annotations. Because the full training dataset contains approximately 4.5 million rows, the experiment filters only records from \textbf{City ID 3}. After filtering, the subset contains 238,320 rows and 19 initial attributes.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of the preprocessed dataset}
+\begin{tabular}{ll}
+\toprule
+\textbf{Item} & \textbf{Value} \\
+\midrule
+Records for City ID 3 & 238,320 \\
+Initial attributes & 19 \\
+Attributes after dropping hierarchy columns & 14 \\
+Unique stores & 101 \\
+Unique products & 173 \\
+Missing values & 0 \\
+Duplicate rows & 0 \\
+Output dataset file & \texttt{freshretailnet\_city\_03\_dataset.csv} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Preprocessing Steps}
+The preprocessing workflow focuses on producing a clean, consistent table suitable for machine learning:
+\begin{itemize}
+    \item \textbf{Regional filtering:} Only records with \texttt{city\_id = 3} are retained to reduce computational cost while preserving a multi-store and multi-product structure.
+    \item \textbf{Dropping hierarchy attributes:} The columns \texttt{management\_group\_id}, \texttt{first\_category\_id}, \texttt{second\_category\_id}, \texttt{third\_category\_id}, and \texttt{city\_id} are removed because they are not directly used by the model in this experiment.
+    \item \textbf{Data-quality checking:} The notebook confirms that there are no missing values and no duplicate rows after excluding list-type columns from the duplicate check.
+    \item \textbf{Identifier normalization:} \texttt{store\_id} and \texttt{product\_id} are converted into readable string forms such as \texttt{Store\_70} and \texttt{Product\_157} for EDA, then label-encoded before model training.
+    \item \textbf{Hourly stock-state parsing:} The \texttt{hours\_stock\_status} field is converted from a list string into a 24-element binary vector using \texttt{ast.literal\_eval}. The model uses positions 6 through 21 to create 16 target labels for operating hours.
+\end{itemize}
+
+\section{Exploratory Data Analysis}
+
+\subsection{Descriptive Statistics}
+The City ID 3 data show a clearly skewed distribution of demand and inventory states. The average \texttt{sale\_amount} is 0.679, the median is 0.600, and the maximum value is 10.000. The variable \texttt{stock\_hour6\_22\_cnt} has a mean of 3.610 and a standard deviation of 5.492, indicating that many records have no inventory disruption while a substantial subset still experiences long stockout durations.
+
+Regarding operating context, \texttt{holiday\_flag} accounts for 34.44\% of records and \texttt{activity\_flag} accounts for 33.72\%. The average \texttt{discount} is 0.915, which corresponds to an approximate 8.5\% discount if 1.000 is interpreted as no discount. Weather variables also provide meaningful contextual variation, including precipitation, average temperature, average humidity, and average wind level.
+
+\subsection{Market Structure and Stockouts}
+The EDA results show a long-tail structure across both stores and products. \texttt{Store\_429} contains 5,940 records, while several smaller stores contain only a few hundred records. Similarly, \texttt{Product\_834} contains 9,090 records, much higher than products that appear infrequently. This implies that the model must learn behavior from entities with very different observation frequencies.
+
+According to the EDA notebook, more than half of the stores have an average stockout duration exceeding 4 hours per day. The hourly stockout curve also varies clearly throughout the day: shortage states rise in some operating windows and then decline as replenishment activities take place. Figure~\ref{fig:eda-overview} illustrates four main EDA perspectives: hourly stockout rate, sales-volume segmentation, product distribution by average stockout hours, and store proportion by average stockout level.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/eda_overview.png}
+\caption{EDA overview for the City ID 3 dataset.}
+\label{fig:eda-overview}
+\end{figure}
+
+\section{Model Construction}
+
+\subsection{Problem Formulation}
+For each record corresponding to a store--product pair on day $t$, the objective is to predict the stockout-state vector across 16 operating hours:
+\begin{equation}
+\hat{Y}_{t} = \left[\hat{y}_{t,6}, \hat{y}_{t,7}, \ldots, \hat{y}_{t,21}\right] \in \{0,1\}^{16}.
+\end{equation}
+Here, $\hat{y}_{t,h}=1$ indicates that the model predicts a stockout at hour $h$, while $\hat{y}_{t,h}=0$ indicates no stockout. This is a multi-label classification task over intraday time points because a single record may contain stockouts at multiple hours.
+
+\subsection{Input Features}
+The model notebook uses 9 input features:
+\begin{quote}
+\small
+\texttt{store\_encoded}, \texttt{product\_encoded}, \texttt{discount}, \texttt{holiday\_flag}, \texttt{activity\_flag}, \texttt{precpt}, \texttt{avg\_temperature}, \texttt{avg\_humidity}, and \texttt{avg\_wind\_level}.
+\end{quote}
+The two features \texttt{store\_encoded} and \texttt{product\_encoded} represent label-encoded entity identifiers. The remaining seven features describe promotions, holidays, campaign activity, and weather conditions.
+
+\subsection{Training Setup}
+The data are sorted by date to prevent temporal leakage. The training set contains 83 days and 219,784 samples, while the test set contains the final 7 days and 18,536 samples. The model uses \texttt{MultiOutputClassifier} to train 16 parallel classifiers, one for each hour from 6:00 to 21:00. The base classifier is \texttt{XGBClassifier} with the following main parameters: \texttt{n\_estimators=50}, \texttt{max\_depth=5}, \texttt{learning\_rate=0.1}, \texttt{random\_state=42}, and \texttt{eval\_metric=logloss}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{figures/feature_importance.png}
+\caption{Average feature contribution across the 16 parallel XGBoost models.}
+\label{fig:feature-importance}
+\end{figure}
+
+\subsection{Prediction-Threshold Optimization}
+Because stockout forecasting is usually class-imbalanced, using the default threshold of 0.5 may cause the model to miss many stockout cases. Therefore, the notebook computes a Precision--Recall curve for each hour and selects the threshold that maximizes F1-Score. Table~\ref{tab:thresholds} shows the 16 optimized thresholds used during evaluation.
+
+\begin{table}[htbp]
+\centering
+\caption{Optimized prediction thresholds by operating hour}
+\label{tab:thresholds}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Hour} & 6h & 7h & 8h & 9h & 10h & 11h & 12h & 13h \\
+\midrule
+\textbf{Threshold} & 0.196 & 0.219 & 0.237 & 0.233 & 0.175 & 0.196 & 0.205 & 0.206 \\
+\bottomrule
+\end{tabular}}
+
+\vspace{0.4em}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Hour} & 14h & 15h & 16h & 17h & 18h & 19h & 20h & 21h \\
+\midrule
+\textbf{Threshold} & 0.219 & 0.239 & 0.251 & 0.279 & 0.299 & 0.328 & 0.337 & 0.345 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\section{Experimental Results}
+
+\subsection{Aggregate Evaluation Metrics}
+The evaluation on 18,536 test samples shows that the model achieves an average Accuracy of 72.22\% across the 16 hourly targets. Precision reaches 41.47\%, while Recall reaches 62.34\%. This indicates that the model prioritizes detecting stockout cases rather than predicting only highly certain cases, which is useful when the operational goal is to reduce missed stockout events.
+
+\begin{table}[htbp]
+\centering
+\caption{Evaluation results of the multi-output XGBoost model}
+\label{tab:model-results}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Test samples & 18,536 \\
+Average Accuracy & 72.22\% \\
+Average Precision & 41.47\% \\
+Average Recall & 62.34\% \\
+Average F1-Score & 49.43\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Confusion-Matrix and Missed-Case Analysis}
+Figure~\ref{fig:confusion-grid} shows the confusion matrix for each hourly target. The 4x4 grid makes it possible to observe correct and incorrect predictions at each time point. Hours with lower stockout rates may obtain higher Accuracy, but Accuracy alone can hide missed cases in the minority class.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/confusion_matrix_grid.png}
+\caption{Confusion matrices for the 16 operating-hour targets.}
+\label{fig:confusion-grid}
+\end{figure}
+
+To focus on stockout detection, Figure~\ref{fig:recall-missed} separates the proportion of actual stockout cases that are captured from the proportion that is missed for each hour. This perspective is more informative than Accuracy when the cost of missing a stockout is higher than the cost of a false alarm. The result shows that some hours still have a notable missed-case ratio, suggesting that the model can be improved with historical features or additional inventory and logistics information.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/recall_missed_by_hour.png}
+\caption{Detected and missed proportions of actual stockout cases by hour.}
+\label{fig:recall-missed}
+\end{figure}
+
+\subsection{Discussion}
+The experimental results show that multi-output XGBoost is a suitable baseline for hourly stockout forecasting because it trains quickly, is relatively interpretable, and handles nonlinear relationships among store identity, product identity, promotions, and weather. However, the low Precision indicates that the model still produces many false-positive alerts. In operations, this may be acceptable if the main objective is early warning, but it should be controlled to avoid overloading replenishment teams.
+
+A key limitation is that the current model does not directly use lagged time-series features such as sales from previous days, previous inventory states of the same product, or replenishment schedule information. These features could improve Precision and F1-Score because they better capture consumption trends and logistics cycles than identifiers, promotions, and weather alone.
+
+\section{Conclusion and Future Work}
+This report presents a complete experimental workflow from preprocessing to model evaluation for multi-target stockout forecasting on the FreshRetailNet-50K dataset. The City ID 3 subset, containing 238,320 records, is cleaned, analyzed, and used to train a multi-output XGBoost model for 16 operating-hour targets. After hour-specific threshold optimization, the model achieves a Recall of 62.34\% and an F1-Score of 49.43\%, indicating meaningful stockout-detection capability while leaving room for improvement.
+
+Future work can extend this report in three directions. First, lagged features at the store--product level can be added so that the model captures short-term consumption trends. Second, XGBoost can be compared with time-series and deep learning models such as TimesNet, PatchTST, and Temporal Fusion Transformer. Third, operational error costs can be incorporated so that prediction thresholds are selected not only by F1-Score but also by business objectives.
+
+\begin{thebibliography}{4}
+\bibitem{zeng} Zeng, A., Chen, M., Zhang, L., Xu, Q.: Are Transformers Effective for Time Series Forecasting? AAAI \textbf{37}(9), 11121--11128 (2023).
+\bibitem{nie} Nie, Y., Nguyen, N. H., Sinthong, P., Kalagnanam, J.: A Time Series is Worth 64 Words: Long-term Forecasting with Transformers. ICLR (2023).
+\bibitem{dingdong} Dingdong-Inc: FreshRetailNet-50K: A Stockout-Annotated Censored Demand Dataset for Latent Demand Recovery and Forecasting in Fresh Retail. arXiv:2505.16319 (2025).
+\bibitem{github} Dingdong-Inc repository: Fresh Retail 50K Baseline Infrastructure. \url{https://github.com/Dingdong-Inc/frn-50k-baseline}.
+\end{thebibliography}
+
+\end{document}
