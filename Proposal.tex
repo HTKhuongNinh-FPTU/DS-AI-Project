@@ -1,0 +1,148 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1,T5]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\usepackage[table]{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+\urlstyle{same}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.85\baselineskip}
+\emergencystretch=2em
+\setlist[itemize]{leftmargin=*, topsep=0.25\baselineskip}
+\setlist[enumerate]{leftmargin=*, topsep=0.25\baselineskip}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+\begin{document}
+\sloppy
+
+\begin{center}
+{\LARGE\bfseries Research Proposal}
+\end{center}
+
+\begin{table}[htbp]
+\centering
+\begin{tabularx}{\textwidth}{>{\bfseries}p{0.24\textwidth}X}
+\toprule
+Research title & Hourly Out-of-Stock Prediction for Fresh Food Retail \\
+Mentor & Lê Võ Minh Thư (ThuLVM) \\
+Members & Hà Thúc Khương Ninh (SE196288) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section*{Abstract}
+
+In the fresh food retail sector, accurate demand forecasting is essential for maintaining an efficient supply chain. However, sudden stockouts frequently complicate inventory management and diminish business performance. This project aims to develop an hourly stockout prediction system using the FreshRetailNet-50K dataset to proactively identify stockout risks and support timely supply replenishment.
+
+The research focuses on addressing three key questions: how to leverage hourly inventory status data for early stockout detection; how the integration of external variables enhances forecasting accuracy; and which machine learning model provides optimal performance in identifying stockout states.
+
+The methodology follows a comprehensive data science lifecycle: extracting data via the Hugging Face datasets library; performing time-series processing using advanced SQL to engineer lag and rolling features; and training five machine learning models (XGBoost, LightGBM, Random Forest, Logistic Regression, MLP) against the baseline study. Furthermore, the project incorporates SHAP for model explainability and an AI Audit Log to track and control the development process. The expected outcome is a real-time monitoring dashboard with high predictive performance, evaluated via F1-Score and Recall, providing a practical contribution to effective inventory management and logistics coordination.
+
+\textbf{Keywords:} Stockout prediction, inventory management, supply chain management, demand forecasting, time-series forecasting, machine learning.
+
+\section{Introduction}
+
+\subsection{Literature Review}
+
+International research on retail demand forecasting has extensively applied time-series analysis and machine learning techniques, such as ARIMA, LSTM, and ensemble methods (XGBoost, LightGBM), to optimize inventory levels. Recent studies emphasize the importance of high-frequency data---specifically hourly observations---to capture dynamic consumer behavior and stockout patterns. While these models demonstrate high predictive accuracy, they often overlook the computational efficiency of data preparation stages.
+
+In Vietnam, research on supply chain management has focused on traditional forecasting models for supermarket operations and warehouse management. However, there is a lack of localized studies leveraging granular hourly data for ``Fresh Food'' sectors. Existing works primarily focus on macroscopic sales trends rather than the micro-level predictive analytics required for real-time inventory replenishment.
+
+\subsection{Limitations of Current Works}
+
+Current stockout prediction systems face three primary limitations. First, many rely on static or daily data, failing to capture the intra-day volatility characteristic of fresh food retail. Second, existing solutions often use complex, monolithic codebases for feature engineering, making them difficult to audit or replicate. Finally, there is a disconnect between data processing logic and machine learning model architecture, which complicates system maintenance. These limitations highlight the necessity of a modular, audit-aware pipeline that separates feature construction from model training.
+
+\subsection{Necessity of the Research}
+
+This research addresses the need for a precise, hourly-level stockout prediction system. The originality lies in the integration of an independent SQL-based processing layer to engineer temporal features, including lag and rolling metrics, ensuring that input data is structured and enriched prior to model training. The study is timely due to the increasing demand for data-driven precision in fresh food logistics. Scientifically, the research contributes a reproducible framework that bridges robust data engineering with high-performance predictive modeling.
+
+\section{Research Objectives}
+
+\begin{itemize}
+  \item Develop a complete data pipeline covering ingestion, cleaning, and SQL-based feature engineering for hourly time-series data.
+  \item Implement and evaluate five machine learning models (XGBoost, LightGBM, Random Forest, Logistic Regression, MLP) for stockout prediction.
+  \item Compare model performance against baseline studies using robust metrics: Precision, Accuracy, Recall, and F1-Score.
+  \item Integrate an AI Audit Log and SHAP explainability to ensure transparency and traceability in the predictive process.
+\end{itemize}
+
+\section{Research Scope}
+
+The study develops a stockout prediction prototype for fresh food retail, focusing on hourly data from one representative city within the FreshRetailNet-50K dataset. The research scope encompasses the end-to-end data pipeline, specifically the integration of an independent SQL-based processing layer for temporal feature engineering, model training across five selected algorithms, and the application of four evaluation metrics: Accuracy, Precision, Recall, and F1-Score. Additionally, the project includes the implementation of SHAP for model explainability and an AI Audit Log for process traceability. The study does not aim for full-scale commercial deployment but serves as a reproducible and extensible framework for inventory management.
+
+\section{Feasibility of Research}
+
+The project is highly feasible within the 10-week timeframe, relying on the structured FreshRetailNet-50K dataset and open-source machine learning tools that require no specialized hardware. By adopting a modular architecture---where SQL functions only as a data utility---the development process remains focused on iterative model training and benchmarking. The clear separation between data preprocessing and predictive modeling ensures system maintainability and eases the auditing process, allowing the research objectives to be achieved with high technical reliability.
+
+\section{Approach and Method}
+
+The research adopts a system-oriented and experimental approach. First, an automated data pipeline is established to ingest and clean the FreshRetailNet-50K dataset. Second, SQL is employed as a utility tool for efficient data querying and organizing temporal sequences. Third, five machine learning models are trained and optimized to predict stockout states. Finally, the system integrates SHAP to provide local explainability for model predictions and an AI Audit Log to track data transformations and model versions, ensuring transparency. Experimental evaluation is conducted using standard classification metrics to benchmark performance.
+
+\section{Research Plan}
+
+\begin{table}[H]
+\centering
+\label{tab:research-plan}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.35}
+\rowcolors{3}{gray!6}{white}
+\begin{tabularx}{\textwidth}{C{0.055\textwidth}C{0.14\textwidth}YYC{0.13\textwidth}}
+\rowcolor{gray!18}
+\toprule
+\textbf{No.} & \textbf{Duration} & \textbf{Task} & \textbf{Output / Milestone} & \textbf{Person} \\
+\midrule
+1 & 12/05--20/05 & Define RQs, planning, data collection & Project plan, 3 RQs, dataset & Khuong Ninh \\
+2 & 20/05--29/05 & Advanced data visualization (EDA) & Visualization report and Python notebook & Khuong Ninh \\
+3 & 30/05--02/06 & Build prediction model baseline & Model baseline and LaTeX draft & Khuong Ninh \\
+4 & 03/06--13/06 & Develop AI-powered prediction solutions & Model results and visualization PDF & Khuong Ninh \\
+5 & 14/06--18/06 & Integrate AI Audit Log and SQL features & Review 1 & Khuong Ninh \\
+6 & 19/06--24/06 & Refine pipeline with SHAP analysis & Full LaTeX paper & Khuong Ninh \\
+7 & 25/06--30/06 & Methodology, discussion, and conclusion & Review 2 & Khuong Ninh \\
+8 & 01/07--07/07 & Code validation; abstract and introduction & Final report & Khuong Ninh \\
+9 & 08/07--12/07 & Final results evaluation; Q\&A preparation & Review 3 & Khuong Ninh \\
+10 & 13/07--20/07 & Final demo, presentation, and Q\&A & Final project & Khuong Ninh \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Computational Resource Requirements}
+
+The research focuses on an efficient and reproducible development environment. No specialized hardware is required. The project will be implemented using:
+
+\begin{itemize}
+  \item \textbf{Development environment:} Python (Jupyter Notebook/VS Code) for data processing and machine learning workflows.
+  \item \textbf{Libraries:} Standard data science stack including pandas, NumPy, scikit-learn, XGBoost, LightGBM, and SHAP for explainability.
+  \item \textbf{Database system:} A SQL-compatible database, such as PostgreSQL or SQLite, to facilitate efficient feature engineering and temporal data organization.
+  \item \textbf{Documentation:} LaTeX for all research reports and paper drafting.
+\end{itemize}
+
+\section{Expected Results}
+
+This research will deliver an audit-ready prototype for hourly stockout prediction. Theoretically, it establishes a reproducible framework linking SQL-based data engineering with transparent, high-performance predictive modeling. Practically, the system provides a monitoring tool to proactively identify stockout risks, enabling optimized replenishment and reduced revenue loss. Ultimately, it serves as both a practical retail solution and a foundation for future data-driven supply chain research.
+
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}
+  \item Zeng, A., Chen, M., Zhang, L., \& Xu, Q. (2023). Are Transformers Effective for Time Series Forecasting? \emph{AAAI}, 37(9), 11121--11128.
+  \item Nie, Y., Nguyen, N. H., Sinthong, P., \& Kalagnanam, J. (2023). A Time Series is Worth 64 Words: Long-term Forecasting with Transformers. \emph{ICLR}.
+  \item Dingdong-Inc. (2025). FreshRetailNet-50K: A Stockout-Annotated Censored Demand Dataset for Latent Demand Recovery and Forecasting in Fresh Retail. \emph{arXiv:2505.16319}.
+  \item Dingdong-Inc. Fresh Retail 50K Baseline Infrastructure. Available at: \url{https://github.com/Dingdong-Inc/frn-50k-baseline}.
+\end{enumerate}
+
+\end{document}
