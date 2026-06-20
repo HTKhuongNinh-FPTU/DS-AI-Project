@@ -7,16 +7,22 @@
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{url}
+\usepackage{placeins}
+\usepackage{float}
 
 \sloppy
+\setlength{\emergencystretch}{2em}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{7pt plus 2pt minus 2pt}
+\setlength{\intextsep}{7pt plus 2pt minus 2pt}
+\renewcommand{\arraystretch}{0.96}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 \begin{document}
-
 \pagestyle{empty}
 
-\title{Experimental Report on Multi-Target Stockout Forecasting Using the FreshRetailNet-50K Dataset}
+\title{Comparative Multi-Target Stockout Forecasting with Hour-Specific Threshold and Explainability Evaluation}
 \author{Ha Thuc Khuong Ninh\inst{1}}
-
 \institute{FPT University, Ho Chi Minh City, Vietnam\\
 \email{hathuckhuongninh@gmail.com}}
 
@@ -24,179 +30,237 @@
 \thispagestyle{empty}
 
 \begin{abstract}
-This report presents a workflow for building a stockout forecasting model in fresh food retail using the FreshRetailNet-50K dataset. Because the original dataset is large, the experiment focuses on the \textbf{City ID 3} subset, which contains 238,320 records, 101 stores, and 173 products. The workflow consists of three main stages: data preprocessing, exploratory data analysis (EDA), and training a multi-output XGBoost model. From the \texttt{hours\_stock\_status} field, the system extracts 16 binary labels corresponding to operating hours from 6:00 to 21:00. A \texttt{MultiOutputClassifier} with an \texttt{XGBClassifier} core is trained on 83 days of data and tested on the final 7 days. After optimizing a separate prediction threshold for each hour using the Precision--Recall curve, the model achieves an average Accuracy of 72.22\%, Precision of 41.47\%, Recall of 62.34\%, and F1-Score of 49.43\% on 18,536 test samples. The results show that the model can detect a meaningful portion of stockout cases, although it still exhibits a trade-off between Recall and Precision because of the class imbalance inherent in stockout forecasting.
+Accurate short-term stockout forecasting is important for fresh food retail because missed stockouts reduce service quality and unnecessary alerts increase replenishment effort. This report consolidates six selected workflows: one data-processing/EDA workflow and five model workflows using XGBoost, LightGBM, Random Forest, Logistic Regression, and MLP. All models are evaluated on the FreshRetailNet-50K City ID 3 subset with 238,320 records, 101 stores, 173 products, and 90 days. The task predicts 16 hourly stockout labels for hours 6:00--21:00 using 15 input features, a chronological 83-day/7-day split, hour-specific Precision--Recall thresholds, macro-averaged metrics, feature importance, and SHAP checks. XGBoost achieves the best Accuracy (80.20\%), Recall (69.72\%), and F1-Score (61.36\%), while LightGBM achieves the highest Precision (55.70\%) with a similar F1-Score (61.34\%).
+
+\keywords{Fresh food retail \and Stockout forecasting \and Multi-output classification \and Hour-specific thresholding \and Explainable AI \and FreshRetailNet-50K.}
 \end{abstract}
 
 \section{Introduction}
-Inventory management in fresh food retail is challenging because products have short shelf lives, demand changes rapidly throughout the day, and replenishment is constrained by logistics. When a product is out of stock, the sales system often records zero sales. This zero value does not necessarily indicate low demand; it may instead result from customers being unable to purchase the product. This phenomenon creates censored sales data and causes traditional demand forecasting models to underestimate true demand.
+Inventory management in fresh food retail is difficult because products have short shelf lives, hourly demand changes quickly, and replenishment decisions must be made before shelves become empty. In this context, a zero-sale observation is ambiguous: it can indicate either no demand or unavailable stock. Predicting stockout states directly is therefore important for reducing censored-demand effects and supporting replenishment decisions.
 
-The objective of this report is to build an experimental workflow that forecasts stockout states at multiple checkpoints within a day. Instead of predicting a single daily label, the model simultaneously predicts 16 binary states across the operating window from 6:00 to 21:00. This approach helps identify periods that are more likely to experience shortages and supports more time-specific replenishment planning.
+This report consolidates six selected experimental workflows into one comparative study. The first workflow performs City ID 3 filtering, validation, EDA, feature engineering, and export. The five model workflows reuse the same modeling table to train multi-output classifiers for XGBoost, LightGBM, Random Forest, Logistic Regression, and MLP. The objective is to predict a 16-dimensional binary stockout vector for operating hours 6:00--21:00.
 
-The experiment is implemented across three notebooks: \texttt{uploads/DataPreprocessing.ipynb} for data preprocessing, \texttt{prism-uploads/EDA.ipynb} for exploratory analysis, and \texttt{prism-uploads/XGBoost\_Model.ipynb} for model construction and evaluation.
+\noindent\textbf{Contributions.} The report reconstructs the submitted data-to-model pipeline, compares five algorithms under the same target, feature set, split, and threshold-tuning procedure, and summarizes feature-importance/SHAP evidence from the model workflows.
 
-\section{Data and Preprocessing}
+\section{Related Work}
+Fresh food stockout forecasting differs from ordinary sales forecasting because observed sales can be censored by inventory availability. FreshRetailNet-50K was introduced for stockout-annotated censored-demand research in fresh retail \cite{dingdong}. Its hourly stock-status arrays make it suitable for direct stockout prediction rather than indirect inference from zero sales alone.
 
-\subsection{Data Source}
-The data are taken from FreshRetailNet-50K, a fresh food retail dataset with hourly inventory-state annotations. Because the full training dataset contains approximately 4.5 million rows, the experiment filters only records from \textbf{City ID 3}. After filtering, the subset contains 238,320 rows and 19 initial attributes.
+For tabular retail data, tree ensembles are strong baselines because they capture nonlinear interactions with limited preprocessing. XGBoost applies regularized gradient-boosted trees \cite{chen}; LightGBM improves boosting efficiency through histogram-based learning and leaf-wise growth \cite{ke}; and Random Forest provides a bagging-based ensemble reference \cite{breiman}. Logistic Regression remains useful as a transparent linear baseline. MLP represents a neural nonlinear baseline but may require stronger scaling and longer training for tabular retail data. Model interpretation is also essential: global feature importance identifies dominant predictors, while SHAP assigns output contributions to individual variables \cite{lundberg}.
 
-\begin{table}[htbp]
+\section{Methodology}
+The study follows the workflow in Fig.~\ref{fig:pipeline}. The data-processing workflow prepares and exports the City ID 3 modeling table. The five model workflows then apply the same target construction, 15-feature set, chronological split, multi-output wrapper, threshold tuning, metric calculation, and interpretation procedure.
+
+Table~\ref{tab:source-audit} records the ordered workflow used in the report. The first workflow is separated into data processing, EDA, and feature engineering; the five model workflows are labeled Model~1 to Model~5.
+
+\begin{table}[!htbp]
 \centering
-\caption{Summary of the preprocessed dataset}
-\begin{tabular}{ll}
+\caption{Ordered audit of the submitted workflows used in the final report.}
+\label{tab:source-audit}
+\scriptsize
+\begin{tabular}{L{0.21\textwidth}L{0.32\textwidth}L{0.36\textwidth}}
 \toprule
-\textbf{Item} & \textbf{Value} \\
+\textbf{Step} & \textbf{Main role} & \textbf{Key information extracted} \\
 \midrule
-Records for City ID 3 & 238,320 \\
-Initial attributes & 19 \\
-Attributes after dropping hierarchy columns & 14 \\
-Unique stores & 101 \\
-Unique products & 173 \\
-Missing values & 0 \\
-Duplicate rows & 0 \\
-Output dataset file & \texttt{freshretailnet\_city\_03\_dataset.csv} \\
+Data processing & Dataset loading and validation & City ID 3 subset, no missing values, no duplicates, 238,320 records, 101 stores, 173 products. \\
+EDA & Exploratory analysis & Zero-sale patterns, stock-status distributions, and univariate, bivariate, and multivariate plots. \\
+Feature engineering & Modeling-table construction & Lagged stockout rate, weekend indicator, 15 input features, and 16 hourly stockout targets. \\
+Model 1: XGBoost & Best boosted-tree model & 16 thresholds, final metrics, feature importance, and representative SHAP checks. \\
+Model 2: LightGBM & Precision-oriented boosted tree & 16 thresholds, final metrics, feature importance, and representative SHAP checks. \\
+Model 3: Random Forest & Bagging ensemble baseline & Higher threshold scale, final metrics, tree feature importance, and SHAP checks. \\
+Model 4: Logistic Regression & Linear baseline & Final metrics, threshold behavior, coefficient-based importance, and SHAP checks. \\
+Model 5: MLP & Neural baseline & Final metrics, threshold variability, permutation importance, and SHAP checks. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Preprocessing Steps}
-The preprocessing workflow focuses on producing a clean, consistent table suitable for machine learning:
-\begin{itemize}
-    \item \textbf{Regional filtering:} Only records with \texttt{city\_id = 3} are retained to reduce computational cost while preserving a multi-store and multi-product structure.
-    \item \textbf{Dropping hierarchy attributes:} The columns \texttt{management\_group\_id}, \texttt{first\_category\_id}, \texttt{second\_category\_id}, \texttt{third\_category\_id}, and \texttt{city\_id} are removed because they are not directly used by the model in this experiment.
-    \item \textbf{Data-quality checking:} The notebook confirms that there are no missing values and no duplicate rows after excluding list-type columns from the duplicate check.
-    \item \textbf{Identifier normalization:} \texttt{store\_id} and \texttt{product\_id} are converted into readable string forms such as \texttt{Store\_70} and \texttt{Product\_157} for EDA, then label-encoded before model training.
-    \item \textbf{Hourly stock-state parsing:} The \texttt{hours\_stock\_status} field is converted from a list string into a 24-element binary vector using \texttt{ast.literal\_eval}. The model uses positions 6 through 21 to create 16 target labels for operating hours.
-\end{itemize}
-
-\section{Exploratory Data Analysis}
-
-\subsection{Descriptive Statistics}
-The City ID 3 data show a clearly skewed distribution of demand and inventory states. The average \texttt{sale\_amount} is 0.679, the median is 0.600, and the maximum value is 10.000. The variable \texttt{stock\_hour6\_22\_cnt} has a mean of 3.610 and a standard deviation of 5.492, indicating that many records have no inventory disruption while a substantial subset still experiences long stockout durations.
-
-Regarding operating context, \texttt{holiday\_flag} accounts for 34.44\% of records and \texttt{activity\_flag} accounts for 33.72\%. The average \texttt{discount} is 0.915, which corresponds to an approximate 8.5\% discount if 1.000 is interpreted as no discount. Weather variables also provide meaningful contextual variation, including precipitation, average temperature, average humidity, and average wind level.
-
-\subsection{Market Structure and Stockouts}
-The EDA results show a long-tail structure across both stores and products. \texttt{Store\_429} contains 5,940 records, while several smaller stores contain only a few hundred records. Similarly, \texttt{Product\_834} contains 9,090 records, much higher than products that appear infrequently. This implies that the model must learn behavior from entities with very different observation frequencies.
-
-According to the EDA notebook, more than half of the stores have an average stockout duration exceeding 4 hours per day. The hourly stockout curve also varies clearly throughout the day: shortage states rise in some operating windows and then decline as replenishment activities take place. Figure~\ref{fig:eda-overview} illustrates four main EDA perspectives: hourly stockout rate, sales-volume segmentation, product distribution by average stockout hours, and store proportion by average stockout level.
-
-\begin{figure}[htbp]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\textwidth]{figures/eda_overview.png}
-\caption{EDA overview for the City ID 3 dataset.}
-\label{fig:eda-overview}
+\includegraphics[width=0.96\textwidth]{figures/stockout_pipeline.png}
+\caption{Overall pipeline reconstructed from the six submitted workflows.}
+\label{fig:pipeline}
 \end{figure}
 
-\section{Model Construction}
+\section{Sequential Experimental Workflow}
+This section follows the workflow order: data processing, EDA, feature engineering, shared modeling protocol, and Model~1--Model~5 comparison.
 
-\subsection{Problem Formulation}
-For each record corresponding to a store--product pair on day $t$, the objective is to predict the stockout-state vector across 16 operating hours:
-\begin{equation}
-\hat{Y}_{t} = \left[\hat{y}_{t,6}, \hat{y}_{t,7}, \ldots, \hat{y}_{t,21}\right] \in \{0,1\}^{16}.
-\end{equation}
-Here, $\hat{y}_{t,h}=1$ indicates that the model predicts a stockout at hour $h$, while $\hat{y}_{t,h}=0$ indicates no stockout. This is a multi-label classification task over intraday time points because a single record may contain stockouts at multiple hours.
+\subsection{Data Processing}
+The data-processing workflow loads the FreshRetailNet-50K training split and filters records with \texttt{city\_id=3}. After dropping the redundant city identifier, the dataframe contains 238,320 rows and 18 working columns. No missing values are found. No duplicate rows are found after excluding list-like array columns from the duplicate check. Table~\ref{tab:data-summary} summarizes the final subset.
 
-\subsection{Input Features}
-The model notebook uses 9 input features:
-\begin{quote}
+\begin{table}[!htbp]
+\centering
+\caption{City ID 3 dataset summary after preprocessing.}
+\label{tab:data-summary}
 \small
-\texttt{store\_encoded}, \texttt{product\_encoded}, \texttt{discount}, \texttt{holiday\_flag}, \texttt{activity\_flag}, \texttt{precpt}, \texttt{avg\_temperature}, \texttt{avg\_humidity}, and \texttt{avg\_wind\_level}.
-\end{quote}
-The two features \texttt{store\_encoded} and \texttt{product\_encoded} represent label-encoded entity identifiers. The remaining seven features describe promotions, holidays, campaign activity, and weather conditions.
-
-\subsection{Training Setup}
-The data are sorted by date to prevent temporal leakage. The training set contains 83 days and 219,784 samples, while the test set contains the final 7 days and 18,536 samples. The model uses \texttt{MultiOutputClassifier} to train 16 parallel classifiers, one for each hour from 6:00 to 21:00. The base classifier is \texttt{XGBClassifier} with the following main parameters: \texttt{n\_estimators=50}, \texttt{max\_depth=5}, \texttt{learning\_rate=0.1}, \texttt{random\_state=42}, and \texttt{eval\_metric=logloss}.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.88\textwidth]{figures/feature_importance.png}
-\caption{Average feature contribution across the 16 parallel XGBoost models.}
-\label{fig:feature-importance}
-\end{figure}
-
-\subsection{Prediction-Threshold Optimization}
-Because stockout forecasting is usually class-imbalanced, using the default threshold of 0.5 may cause the model to miss many stockout cases. Therefore, the notebook computes a Precision--Recall curve for each hour and selects the threshold that maximizes F1-Score. Table~\ref{tab:thresholds} shows the 16 optimized thresholds used during evaluation.
-
-\begin{table}[htbp]
-\centering
-\caption{Optimized prediction thresholds by operating hour}
-\label{tab:thresholds}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lcccccccc}
+\begin{tabular}{ll@{\hspace{0.75cm}}ll}
 \toprule
-\textbf{Hour} & 6h & 7h & 8h & 9h & 10h & 11h & 12h & 13h \\
+\textbf{Item} & \textbf{Value} & \textbf{Item} & \textbf{Value} \\
 \midrule
-\textbf{Threshold} & 0.196 & 0.219 & 0.237 & 0.233 & 0.175 & 0.196 & 0.205 & 0.206 \\
-\bottomrule
-\end{tabular}}
-
-\vspace{0.4em}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lcccccccc}
-\toprule
-\textbf{Hour} & 14h & 15h & 16h & 17h & 18h & 19h & 20h & 21h \\
-\midrule
-\textbf{Threshold} & 0.219 & 0.239 & 0.251 & 0.279 & 0.299 & 0.328 & 0.337 & 0.345 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\section{Experimental Results}
-
-\subsection{Aggregate Evaluation Metrics}
-The evaluation on 18,536 test samples shows that the model achieves an average Accuracy of 72.22\% across the 16 hourly targets. Precision reaches 41.47\%, while Recall reaches 62.34\%. This indicates that the model prioritizes detecting stockout cases rather than predicting only highly certain cases, which is useful when the operational goal is to reduce missed stockout events.
-
-\begin{table}[htbp]
-\centering
-\caption{Evaluation results of the multi-output XGBoost model}
-\label{tab:model-results}
-\begin{tabular}{lc}
-\toprule
-\textbf{Metric} & \textbf{Value} \\
-\midrule
-Test samples & 18,536 \\
-Average Accuracy & 72.22\% \\
-Average Precision & 41.47\% \\
-Average Recall & 62.34\% \\
-Average F1-Score & 49.43\% \\
+Filtered records & 238,320 & Unique stores & 101 \\
+Working columns & 18 & Unique products & 173 \\
+Management groups & 7 & First-level categories & 23 \\
+Second-level categories & 43 & Third-level categories & 96 \\
+Calendar days & 90 & Missing values & 0 \\
+Training samples & 219,784 & Test samples & 18,536 \\
+Input features & 15 & Hourly targets & 16 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Confusion-Matrix and Missed-Case Analysis}
-Figure~\ref{fig:confusion-grid} shows the confusion matrix for each hourly target. The 4x4 grid makes it possible to observe correct and incorrect predictions at each time point. Hours with lower stockout rates may obtain higher Accuracy, but Accuracy alone can hide missed cases in the minority class.
+\subsection{Exploratory Data Analysis}
+EDA confirms that the subset contains meaningful variation for stockout modeling. The all-zero \texttt{hours\_sale} vector appears 26,396 times. For \texttt{hours\_stock\_status}, the all-zero vector appears 103,786 times, while the all-one vector appears 23,081 times. This shows that the data include both fully available and fully unavailable daily patterns. Figures~\ref{fig:eda-univariate}--\ref{fig:eda-multivariate} place the EDA visualizations directly after the EDA discussion and enlarge them for readability.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/confusion_matrix_grid.png}
-\caption{Confusion matrices for the 16 operating-hour targets.}
-\label{fig:confusion-grid}
+\includegraphics[width=0.96\textwidth]{figures/eda_univariate.png}
+\caption{Univariate EDA summary for the City ID 3 subset.}
+\label{fig:eda-univariate}
 \end{figure}
 
-To focus on stockout detection, Figure~\ref{fig:recall-missed} separates the proportion of actual stockout cases that are captured from the proportion that is missed for each hour. This perspective is more informative than Accuracy when the cost of missing a stockout is higher than the cost of a false alarm. The result shows that some hours still have a notable missed-case ratio, suggesting that the model can be improved with historical features or additional inventory and logistics information.
-
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/recall_missed_by_hour.png}
-\caption{Detected and missed proportions of actual stockout cases by hour.}
-\label{fig:recall-missed}
+\includegraphics[width=0.96\textwidth]{figures/eda_bivariate.png}
+\caption{Bivariate EDA summary showing relationships among key variables.}
+\label{fig:eda-bivariate}
 \end{figure}
 
-\subsection{Discussion}
-The experimental results show that multi-output XGBoost is a suitable baseline for hourly stockout forecasting because it trains quickly, is relatively interpretable, and handles nonlinear relationships among store identity, product identity, promotions, and weather. However, the low Precision indicates that the model still produces many false-positive alerts. In operations, this may be acceptable if the main objective is early warning, but it should be controlled to avoid overloading replenishment teams.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.96\textwidth]{figures/eda_multivariate.png}
+\caption{Multivariate EDA summary for combined stockout, product, store, and contextual patterns.}
+\label{fig:eda-multivariate}
+\end{figure}
 
-A key limitation is that the current model does not directly use lagged time-series features such as sales from previous days, previous inventory states of the same product, or replenishment schedule information. These features could improve Precision and F1-Score because they better capture consumption trends and logistics cycles than identifiers, promotions, and weather alone.
+\FloatBarrier
 
-\section{Conclusion and Future Work}
-This report presents a complete experimental workflow from preprocessing to model evaluation for multi-target stockout forecasting on the FreshRetailNet-50K dataset. The City ID 3 subset, containing 238,320 records, is cleaned, analyzed, and used to train a multi-output XGBoost model for 16 operating-hour targets. After hour-specific threshold optimization, the model achieves a Recall of 62.34\% and an F1-Score of 49.43\%, indicating meaningful stockout-detection capability while leaving room for improvement.
+\subsection{Feature Engineering}
+Feature engineering creates date-derived variables and two final modeling features. The first is \texttt{oos\_rate\_lag1\_day}, computed within each store--product pair as the previous day's stockout rate over the 6:00--21:00 window:
+\begin{equation}
+\texttt{oos\_rate\_lag1\_day}_{s,p,t}=\frac{\texttt{oos\_hours\_per\_record}_{s,p,t-1}}{16}.
+\end{equation}
+Missing lag values are filled with 0. The second feature, \texttt{is\_weekend}, produces 68,848 weekend records and 169,472 weekday records.
 
-Future work can extend this report in three directions. First, lagged features at the store--product level can be added so that the model captures short-term consumption trends. Second, XGBoost can be compared with time-series and deep learning models such as TimesNet, PatchTST, and Temporal Fusion Transformer. Third, operational error costs can be incorporated so that prediction thresholds are selected not only by F1-Score but also by business objectives.
+Each model parses \texttt{hours\_stock\_status}, a 24-hour stock-status vector, and slices indices 6:22 to obtain 16 operating-hour labels. For store--product record $i$ on day $t$, the target is
+\begin{equation}
+Y_{i,t}=\left[y_{i,t,6},y_{i,t,7},\ldots,y_{i,t,21}\right] \in \{0,1\}^{16},
+\end{equation}
+where $y_{i,t,h}=1$ indicates a stockout at hour $h$ and $y_{i,t,h}=0$ indicates availability. Each classifier therefore produces 16 binary outputs.
 
-\begin{thebibliography}{4}
-\bibitem{zeng} Zeng, A., Chen, M., Zhang, L., Xu, Q.: Are Transformers Effective for Time Series Forecasting? AAAI \textbf{37}(9), 11121--11128 (2023).
-\bibitem{nie} Nie, Y., Nguyen, N. H., Sinthong, P., Kalagnanam, J.: A Time Series is Worth 64 Words: Long-term Forecasting with Transformers. ICLR (2023).
+All models use the same 15 features from the notebooks: store/product/category identifiers, \texttt{discount}, \texttt{holiday\_flag}, \texttt{activity\_flag}, weather variables, \texttt{oos\_rate\_lag1\_day}, and \texttt{is\_weekend}.
+
+\subsection{Shared Modeling Protocol}
+The dataset is sorted by date before splitting. The first 83 days are used for training, giving \texttt{X\_train} with shape $(219{,}784,15)$; the final 7 days are used for testing, giving \texttt{X\_test} with shape $(18{,}536,15)$. Chronological splitting reduces temporal leakage and better represents deployment.
+
+Each algorithm is wrapped in \texttt{MultiOutputClassifier}, producing one binary classifier per operating hour. After training, probability outputs are converted to binary decisions with one threshold per hour. Each threshold is selected from the Precision--Recall curve by maximizing F1-Score. This is necessary because stockout frequency changes across hours, and a single cutoff of 0.5 is not appropriate.
+
+Metrics are computed for each hour and macro-averaged across the 16 outputs:
+\begin{align}
+\mathrm{Accuracy} &= \frac{TP+TN}{TP+TN+FP+FN}, &
+\mathrm{Precision} &= \frac{TP}{TP+FP}, \\
+\mathrm{Recall} &= \frac{TP}{TP+FN}, &
+\mathrm{F1} &= \frac{2\times\mathrm{Precision}\times\mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}}.
+\end{align}
+Here, $TP$, $TN$, $FP$, and $FN$ denote true positives, true negatives, false positives, and false negatives for the stockout class.
+
+\section{Results}
+Table~\ref{tab:model-configs} lists the five model configurations reconstructed from the notebooks. All models use the same 16 targets, 15 features, chronological split, and threshold-selection rule, so Table~\ref{tab:model-results} compares model behavior under the same protocol.
+
+\begin{table}[!htbp]
+\centering
+\caption{Core model configurations.}
+\label{tab:model-configs}
+\scriptsize
+\begin{tabular}{L{0.24\textwidth}L{0.65\textwidth}}
+\toprule
+\textbf{Workflow} & \textbf{Configuration} \\
+\midrule
+Model 1: XGBoost & \texttt{n\_estimators=100}, \texttt{max\_depth=7}, \texttt{learning\_rate=0.05}, \texttt{eval\_metric=logloss}, \texttt{random\_state=42}. \\
+Model 2: LightGBM & Binary objective, \texttt{metric=binary\_logloss}, \texttt{n\_estimators=50}, \texttt{learning\_rate=0.1}, \texttt{num\_leaves=31}, \texttt{colsample\_bytree=0.8}, \texttt{subsample=0.8}, L1/L2 regularization. \\
+Model 3: Random Forest & \texttt{n\_estimators=25}, \texttt{max\_depth=6}, \texttt{min\_samples\_leaf=10}, \texttt{class\_weight=balanced}, \texttt{n\_jobs=-1}. \\
+Model 4: Logistic Regression & \texttt{solver=liblinear}, \texttt{random\_state=42}. \\
+Model 5: MLP & Hidden layers $(100,50)$, ReLU activation, Adam solver, \texttt{max\_iter=10}, early stopping, \texttt{n\_iter\_no\_change=3}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\caption{Final test-set performance after optimized hourly thresholds.}
+\label{tab:model-results}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+\midrule
+Model 1: XGBoost & \textbf{80.20\%} & 55.07\% & \textbf{69.72\%} & \textbf{61.36\%} \\
+Model 2: LightGBM & 79.93\% & \textbf{55.70\%} & 69.00\% & 61.34\% \\
+Model 3: Random Forest & 78.80\% & 52.57\% & 67.52\% & 58.87\% \\
+Model 4: Logistic Regression & 75.72\% & 46.87\% & 59.82\% & 52.17\% \\
+Model 5: MLP & 75.58\% & 46.62\% & 60.39\% & 52.41\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+XGBoost leads in Accuracy, Recall, and F1-Score. LightGBM is nearly tied in F1-Score and has the highest Precision. Random Forest is the strongest non-boosting baseline, while Logistic Regression and MLP remain lower-performing references.
+
+\subsection{Model-Specific Findings}
+\textbf{Model 1: XGBoost.} XGBoost is the strongest workflow, with the highest Accuracy, Recall, and F1-Score. Its thresholds range from 0.257 to 0.367.
+
+\textbf{Model 2: LightGBM.} LightGBM is the closest competitor to XGBoost. It has the best Precision and a similar F1-Score, with thresholds from 0.254 to 0.386.
+
+\textbf{Model 3: Random Forest.} Random Forest is the middle baseline. Its Recall is 67.52\%, F1-Score is 58.87\%, and its thresholds are higher than the boosting models (0.402--0.722).
+
+\textbf{Model 4: Logistic Regression.} Logistic Regression is the linear baseline and reaches an F1-Score of 52.17\%.
+
+\textbf{Model 5: MLP.} MLP has Recall of 60.39\% and F1-Score of 52.41\%, but it does not outperform the tree models under the recorded training setup.
+
+\subsection{Threshold Analysis}
+The optimized thresholds differ by model. Table~\ref{tab:threshold-range} keeps only the minimum, maximum, and range from the 16 hourly thresholds recorded in each model notebook.
+
+\begin{table}[!htbp]
+\centering
+\caption{Optimized threshold ranges across 16 operating-hour targets.}
+\label{tab:threshold-range}
+\scriptsize
+\begin{tabular}{lcccL{0.34\textwidth}}
+\toprule
+\textbf{Model} & \textbf{Min.} & \textbf{Max.} & \textbf{Range} & \textbf{Interpretation} \\
+\midrule
+Model 1: XGBoost & 0.257 & 0.367 & 0.110 & Stable boosted-tree calibration. \\
+Model 2: LightGBM & 0.254 & 0.386 & 0.132 & Precision-oriented boosted-tree behavior. \\
+Model 3: Random Forest & 0.402 & 0.722 & 0.320 & Conservative probability scale. \\
+Model 4: Logistic Regression & 0.163 & 0.401 & 0.238 & Linear baseline with variable cutoffs. \\
+Model 5: MLP & 0.017 & 0.449 & 0.432 & Highest threshold instability. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Explainability and Discussion}
+Feature importance is aggregated across the 16 hourly classifiers. Tree models use estimator importance, Logistic Regression uses average absolute coefficients, and MLP uses permutation importance. Figure~\ref{fig:importance-all} summarizes the five model-specific importance plots from the notebooks.
+
+\begin{figure}[!htbp]
+\centering
+\makebox[\textwidth][c]{\includegraphics[width=1.22\textwidth]{figures/feature_importance_5x1.png}}
+\caption{Feature-importance summaries for all five model workflows, arranged as one model per row.}
+\label{fig:importance-all}
+\end{figure}
+
+SHAP is included in the model workflows as a complementary check for representative hours 7, 12, and 17. The plots are not shown here to keep the report compact; the discussion relies mainly on the metrics, threshold ranges, and feature-importance summaries that are directly reported above.
+
+For model selection, XGBoost is preferable when Recall is prioritized, while LightGBM is preferable when Precision is prioritized. The remaining models serve as baselines under the same split and thresholding protocol.
+
+The threshold ranges also show why the notebooks used hour-specific cutoffs instead of a fixed 0.5 threshold.
+
+\section{Conclusion}
+This report revisits the six selected workflows and condenses them into a single comparative study covering City ID 3 filtering, validation, EDA, feature engineering, target construction, five multi-output model experiments, hour-specific threshold tuning, metrics, and explainability checks.
+
+XGBoost is the best final model, with Accuracy of 80.20\%, Recall of 69.72\%, and F1-Score of 61.36\%. LightGBM is a close second, with the best Precision of 55.70\% and an F1-Score of 61.34\%. Under the recorded feature set and split, boosted-tree methods are the strongest models in the six-workflow comparison.
+
+\begin{thebibliography}{5}
 \bibitem{dingdong} Dingdong-Inc: FreshRetailNet-50K: A Stockout-Annotated Censored Demand Dataset for Latent Demand Recovery and Forecasting in Fresh Retail. arXiv:2505.16319 (2025).
-\bibitem{github} Dingdong-Inc repository: Fresh Retail 50K Baseline Infrastructure. \url{https://github.com/Dingdong-Inc/frn-50k-baseline}.
+\bibitem{chen} Chen, T., Guestrin, C.: XGBoost: A Scalable Tree Boosting System. KDD, 785--794 (2016).
+\bibitem{ke} Ke, G., Meng, Q., Finley, T., Wang, T., Chen, W., Ma, W., Ye, Q., Liu, T.-Y.: LightGBM: A Highly Efficient Gradient Boosting Decision Tree. NeurIPS, 3146--3154 (2017).
+\bibitem{breiman} Breiman, L.: Random Forests. Machine Learning \textbf{45}, 5--32 (2001).
+\bibitem{lundberg} Lundberg, S. M., Lee, S.-I.: A Unified Approach to Interpreting Model Predictions. NeurIPS, 4765--4774 (2017).
 \end{thebibliography}
 
 \end{document}
