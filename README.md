@@ -1,1 +1,1 @@
-Link dashboard :http://127.0.0.1:8501
+Link dashboard : https://freshretail.streamlit.app
