@@ -320,55 +320,69 @@ df_multi['oos_hours_per_record'] = total_hours_in_window_multi - df_multi['stock
 
 df_multi['day_of_week'] = df_multi['dt'].dt.day_name()
 
-sns.set_theme(style="whitegrid")
+# --- BỔ SUNG: LỌC THEO CATEGORY ID ---
+st.markdown("##### 🔍 Multivariate Filters")
+all_categories = sorted([x for x in df_multi['first_category_id'].unique() if pd.notna(x)])
+selected_categories = st.multiselect("Select First Category ID(s) to display:", options=all_categories, default=all_categories[:10])
 
-fig_multi, axes_multi = plt.subplots(2, 1, figsize=(22, 18))
-fig_multi.suptitle('Hourly Out-of-Stock Prediction for Fresh Food Retail\n(Operating Scale Window: 6h00 - 21h59)', fontsize=16, fontweight='bold', y=1.00)
+# Áp dụng lọc Category nếu người dùng có chọn
+if selected_categories:
+    df_multi = df_multi[df_multi['first_category_id'].isin(selected_categories)]
 
-# 1. Heatmap: Product OOS Hours Across Days of Week
-if 'day_of_week' in df_multi.columns:
-    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    df_multi['day_of_week'] = pd.Categorical(df_multi['day_of_week'], categories=day_order, ordered=True)
+st.markdown(f"**Number of records for multivariate analysis after category filtering:** {df_multi.shape[0]:,}")
 
-avg_oos_cat_day = df_multi.groupby(['first_category_id', 'day_of_week'], observed=False)['oos_hours_per_record'].mean().unstack()
+if df_multi.shape[0] == 0:
+    st.warning("No data matches the selected Category ID(s). Please select more categories.")
+else:
+    sns.set_theme(style="whitegrid")
 
-sns.heatmap(
-    avg_oos_cat_day,
-    annot=True,      
-    fmt=".1f",       
-    cmap="YlGnBu",   
-    linewidths=.5,   
-    ax=axes_multi[0]
-)
-axes_multi[0].set_title('1. Product OOS Hours Across Days of Week', fontsize=14, fontweight='bold')
-axes_multi[0].set_xlabel('Day of Week', fontsize=11)
-axes_multi[0].set_ylabel('First Category ID', fontsize=11)
-axes_multi[0].tick_params(axis='x', rotation=45)
-axes_multi[0].tick_params(axis='y', rotation=0)
+    fig_multi, axes_multi = plt.subplots(2, 1, figsize=(22, 18))
+    fig_multi.suptitle('Hourly Out-of-Stock Prediction for Fresh Food Retail\n(Operating Scale Window: 6h00 - 21h59)', fontsize=16, fontweight='bold', y=1.00)
 
-# 2. Line Plot: Product OOS Hours Across Temperature Ranges
-if 'temperature_range' not in df_multi.columns and 'avg_temperature' in df_multi.columns:
-    temperature_bins = [0, 14, 18, 22, 26, 30, np.inf] 
-    temperature_labels = ['<14°C', '14-18°C', '18-22°C', '22-26°C', '26-30°C', '>30°C']
-    df_multi['temperature_range'] = pd.cut(df_multi['avg_temperature'], bins=temperature_bins, labels=temperature_labels, right=False)
+    # 1. Heatmap: Product OOS Hours Across Days of Week
+    if 'day_of_week' in df_multi.columns:
+        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        df_multi['day_of_week'] = pd.Categorical(df_multi['day_of_week'], categories=day_order, ordered=True)
 
-avg_oos_temp_cat = df_multi.groupby(['temperature_range', 'first_category_id'], observed=False)['oos_hours_per_record'].mean().reset_index()
-avg_oos_temp_cat['first_category_id'] = avg_oos_temp_cat['first_category_id'].astype(str)
+    avg_oos_cat_day = df_multi.groupby(['first_category_id', 'day_of_week'], observed=False)['oos_hours_per_record'].mean().unstack()
 
-sns.lineplot(
-    x='temperature_range',
-    y='oos_hours_per_record',
-    hue='first_category_id',
-    data=avg_oos_temp_cat,
-    marker='o',
-    ax=axes_multi[1],
-    palette='tab20'
-)
-axes_multi[1].set_title('2. Product OOS Hours Across Temperature Ranges', fontsize=14, fontweight='bold')
-axes_multi[1].set_xlabel('Temperature Range', fontsize=11)
-axes_multi[1].set_ylabel('Average Out-of-Stock Hours', fontsize=11)
-axes_multi[1].tick_params(axis='x', rotation=15)
-axes_multi[1].legend(title='First Category ID', bbox_to_anchor=(1.05, 1), loc='upper left')
+    sns.heatmap(
+        avg_oos_cat_day,
+        annot=True,      
+        fmt=".1f",       
+        cmap="YlGnBu",   
+        linewidths=.5,   
+        ax=axes_multi[0]
+    )
+    axes_multi[0].set_title('1. Product OOS Hours Across Days of Week', fontsize=14, fontweight='bold')
+    axes_multi[0].set_xlabel('Day of Week', fontsize=11)
+    axes_multi[0].set_ylabel('First Category ID', fontsize=11)
+    axes_multi[0].tick_params(axis='x', rotation=45)
+    axes_multi[0].tick_params(axis='y', rotation=0)
 
-plt.tight_layout(rect=[0, 0.03, 1, 0.98])
-st.pyplot(fig_multi)
+    # 2. Line Plot: Product OOS Hours Across Temperature Ranges
+    if 'temperature_range' not in df_multi.columns and 'avg_temperature' in df_multi.columns:
+        temperature_bins = [0, 14, 18, 22, 26, 30, np.inf] 
+        temperature_labels = ['<14°C', '14-18°C', '18-22°C', '22-26°C', '26-30°C', '>30°C']
+        df_multi['temperature_range'] = pd.cut(df_multi['avg_temperature'], bins=temperature_bins, labels=temperature_labels, right=False)
+
+    avg_oos_temp_cat = df_multi.groupby(['temperature_range', 'first_category_id'], observed=False)['oos_hours_per_record'].mean().reset_index()
+    avg_oos_temp_cat['first_category_id'] = avg_oos_temp_cat['first_category_id'].astype(str)
+
+    sns.lineplot(
+        x='temperature_range',
+        y='oos_hours_per_record',
+        hue='first_category_id',
+        data=avg_oos_temp_cat,
+        marker='o',
+        ax=axes_multi[1],
+        palette='tab20'
+    )
+    axes_multi[1].set_title('2. Product OOS Hours Across Temperature Ranges', fontsize=14, fontweight='bold')
+    axes_multi[1].set_xlabel('Temperature Range', fontsize=11)
+    axes_multi[1].set_ylabel('Average Out-of-Stock Hours', fontsize=11)
+    axes_multi[1].tick_params(axis='x', rotation=15)
+    axes_multi[1].legend(title='First Category ID', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.98])
+    st.pyplot(fig_multi)
