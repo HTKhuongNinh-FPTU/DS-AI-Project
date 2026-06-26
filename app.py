@@ -386,3 +386,134 @@ else:
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.98])
     st.pyplot(fig_multi)
+
+# -----------------------------------------------------------------------------
+# 7. PHẦN AI DỰ ĐOÁN HẾT HÀNG (XGBoost) - FULL 15 FEATURES
+# -----------------------------------------------------------------------------
+st.divider()
+st.header("🤖 AI Dự đoán hết hàng (XGBoost)")
+st.markdown("Nhập chính xác 15 thông số để AI dự đoán tình trạng 16 khung giờ tới.")
+
+import joblib
+import os
+import pandas as pd
+
+# Kiểm tra file não AI
+if os.path.exists('xgb_model.pkl'):
+    model = joblib.load('xgb_model.pkl')
+    
+    # Chia giao diện làm 3 cột để nhập liệu cho gọn
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Định danh**")
+        store_id = st.number_input("1. Store ID", value=3)
+        management_group_id = st.number_input("2. Management Group ID", value=1)
+        first_category_id = st.number_input("3. First Category ID", value=10)
+        second_category_id = st.number_input("4. Second Category ID", value=20)
+        third_category_id = st.number_input("5. Third Category ID", value=30)
+        product_id = st.number_input("6. Product ID", value=100)
+
+    with col2:
+        st.markdown("**Sự kiện & Bối cảnh**")
+        discount = st.number_input("7. Discount (%)", value=0.0)
+        holiday_flag = st.selectbox("8. Holiday Flag (Ngày lễ)", [0, 1])
+        activity_flag = st.selectbox("9. Activity Flag (Khuyến mãi)", [0, 1])
+        is_weekend = st.selectbox("10. Is Weekend (Cuối tuần)", [0, 1])
+        oos_rate_lag1_day = st.number_input("11. Tỷ lệ hết hàng hôm qua", value=0.0)
+
+    with col3:
+        st.markdown("**Thời tiết**")
+        precpt = st.number_input("12. Lượng mưa (precpt)", value=0.0)
+        avg_temperature = st.number_input("13. Nhiệt độ (avg_temp)", value=25.0)
+        avg_humidity = st.number_input("14. Độ ẩm (avg_humidity)", value=70.0)
+        avg_wind_level = st.number_input("15. Sức gió (avg_wind_level)", value=2.0)
+
+    # Nút bấm dự đoán
+    if st.button("🚀 Bấm Dự Đoán"):
+        try:
+            # Gom đúng 15 cột, y hệt thứ tự trong XGBoost_Model.ipynb
+            input_data = pd.DataFrame({
+                'store_id': [store_id],
+                'management_group_id': [management_group_id],
+                'first_category_id': [first_category_id],
+                'second_category_id': [second_category_id],
+                'third_category_id': [third_category_id],
+                'product_id': [product_id],
+                'discount': [discount],
+                'holiday_flag': [holiday_flag],
+                'activity_flag': [activity_flag],
+                'precpt': [precpt],
+                'avg_temperature': [avg_temperature],
+                'avg_humidity': [avg_humidity],
+                'avg_wind_level': [avg_wind_level],
+                'oos_rate_lag1_day': [oos_rate_lag1_day],
+                'is_weekend': [is_weekend]
+            })
+            
+            # Quăng vào AI tính toán
+            prediction = model.predict(input_data)
+            
+            # In kết quả
+            st.success("✅ Mô hình đã dự đoán xong! Kết quả từ 6:00 đến 21:59:")
+            khung_gio = [f"{h}:00 - {h}:59" for h in range(6, 22)]
+            ket_qua = ["🔴 Cảnh báo Hết hàng" if x == 1 else "🟢 Còn hàng" for x in prediction[0]]
+            
+            df_ketqua = pd.DataFrame({"Khung giờ": khung_gio, "Dự báo từ AI": ket_qua})
+            st.dataframe(df_ketqua, hide_index=True, use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Có lỗi khi dự đoán, chụp màn hình lỗi này lại: {e}")
+else:
+    st.error("Chưa thấy file 'xgb_model.pkl'. Hãy đảm bảo file não AI nằm cùng chỗ với file app.py!")
+
+
+
+# -----------------------------------------------------------------------------
+# 8. TRỢ LÝ ẢO AI (CHATBOT GEMINI)
+# -----------------------------------------------------------------------------
+st.divider()
+st.header("💬 Trợ lý Ảo Quản lý Tồn kho")
+st.markdown("Chat với AI để phân tích sâu hơn về nguyên nhân hết hàng hoặc chiến lược kinh doanh!")
+
+import google.generativeai as genai
+
+# 1. Ô nhập API Key (Thiết kế dạng password cho bảo mật)
+api_key = st.text_input("🔑 Nhập API Key của Google Gemini vào đây:", type="password")
+
+if api_key:
+    try:
+        # Cấu hình kết nối với Google
+        genai.configure(api_key=api_key)
+        llm_model = genai.GenerativeModel('gemini-3.5-flash')
+
+        # 2. Khởi tạo bộ nhớ để Chatbot không bị "não cá vàng"
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Hiển thị lại lịch sử tin nhắn cũ
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        # 3. Ô chat cho sếp nhập câu hỏi
+        user_question = st.chat_input("Ví dụ: Tại sao nhiệt độ cao thì rau củ lại hay hết hàng?")
+
+        if user_question:
+            # Hiện câu hỏi của người dùng
+            with st.chat_message("user"):
+                st.markdown(user_question)
+            st.session_state.messages.append({"role": "user", "content": user_question})
+
+            # Gọi Google trả lời
+            with st.chat_message("assistant"):
+                # Tiêm thêm bối cảnh để AI trả lời cho ra dáng chuyên gia bán lẻ
+                prompt = f"Bạn là một chuyên gia phân tích dữ liệu siêu thị. Hãy trả lời ngắn gọn, súc tích câu hỏi sau của quản lý: {user_question}"
+                
+                response = llm_model.generate_content(prompt)
+                st.markdown(response.text)
+            
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+
+    except Exception as e:
+        st.error(f"Lỗi kết nối API! Vui lòng kiểm tra lại Key: {e}")
