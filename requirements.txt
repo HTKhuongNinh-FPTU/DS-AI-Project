@@ -1,9 +1,11 @@
 streamlit
 pandas
-xgboost
-joblib
-scikit-learn
+numpy
+plotly
 matplotlib
 seaborn
-shap
+asttokens
+joblib
 gdown
+xgboost
+scikit-learn
