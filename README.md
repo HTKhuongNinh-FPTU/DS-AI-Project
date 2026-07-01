@@ -12,7 +12,7 @@ Interactive Dashboard: A Streamlit-based application for real-time visualization
 
 - Access Links
 
-Management Dashboard: freshretailnetcity03.streamlit.app/
+Management Dashboard: https://freshretailnetcity03.streamlit.app/
 
-AI Prediction Tool: predicthourstock.streamlit.app/
+AI Prediction Tool: https://predicthourstock.streamlit.app/
 
