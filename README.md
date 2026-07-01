@@ -2,7 +2,7 @@
 
 This project focuses on predicting stockouts for fresh food items, helping to optimize inventory management and reduce waste.
 
-Key Features
+- Key Features
 
 Data Analysis: Data preprocessing and Exploratory Data Analysis (EDA) of retail datasets.
 
