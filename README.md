@@ -11,7 +11,8 @@ Forecasting Models: Implementation of various Machine Learning algorithms, inclu
 Interactive Dashboard: A Streamlit-based application for real-time visualization and stockout predictions.
 
 - Access Links
-Management Dashboard
 
-AI Prediction Tool
+Management Dashboard:
+
+AI Prediction Tool:
 
